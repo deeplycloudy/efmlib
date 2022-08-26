@@ -11,7 +11,7 @@ from scipy.optimize import curve_fit
 #####
 
 valid_ranges = dict(
-    adc_volts = (-5, 5), 
+    adc_volts = (-5, 5),
     acceleration_x = (-25, 25),
     acceleration_y = (-25, 25),
     acceleration_z = (-25, 25),
@@ -56,16 +56,16 @@ def decode_data_packet(mp):
 
 def fix_adc_offset(df, dt=0.065, up=50, adc_var='adc_volts_withlag'):
     """
-    The charge amplifier output exhibits a lag relative to the IMU, probably 
+    The charge amplifier output exhibits a lag relative to the IMU, probably
     beacuse of some combination of an internal filter in the ADC and a phase
-    offset produced by the charge amplifier. 
-    
+    offset produced by the charge amplifier.
+
     So, this function moves the adc_volts signal in df earlier in time by dt.
     Upsamples by up before shifting a fixed number of data points equivalent to dt.
     Returns a pandas Series with the same shape as df.adc_volts_withlag.
-    
+
     % Need to advance the charge amplifier signal by dt to compensate for time
-    % delay.  To do this, interpolate by a fairly large amount, then shift 
+    % delay.  To do this, interpolate by a fairly large amount, then shift
     % charge amplifier data by an amount corresponding to the time delay
     %NI = 200;   % Number to up-sample by
     NI = 50;    % Number to up-sample by (Time resolution = 0.71 ms)
@@ -77,14 +77,14 @@ def fix_adc_offset(df, dt=0.065, up=50, adc_var='adc_volts_withlag'):
     E(length(E):length(ar_raw))=0;
     fprintf(['E data upsampled, shifted, backsampled ... \n'])
     """
-    
+
     from scipy.signal import resample
-    
+
     t = df.adc_ready_millis*1.0e-3 # seconds
     delta_ts = t.diff()
     fs = 1.0/delta_ts.median()
     new_fs = fs*up
-    
+
     n_orig = df[adc_var].shape[0]
     n_up = n_orig*up
     adc_up = resample(df[adc_var], n_up)
@@ -104,12 +104,12 @@ def read_efm_raw(filenames, shift_dt=0.065):
     for filename in filenames:
         with open(filename, 'rb') as f:
             ba = ba + f.read()
-    
+
     data_start_bytes = []
     gps_start_bytes = []
     data_packet_length = 51
     gps_packet_length = 19
-    
+
     # Determine the valid starting bytes for data and gps packets
     for i in range(len(ba) - data_packet_length):
         if (ba[i] == 190) and (ba[i+data_packet_length] == 239):
@@ -119,7 +119,7 @@ def read_efm_raw(filenames, shift_dt=0.065):
         if (ba[i] == 254) and (ba[i+gps_packet_length] == 237):
             #print(ba[i], ba[i+data_packet_length])
             gps_start_bytes.append(i)
-    
+
     gps_raw_packets = []
     data_raw_packets = []
 
@@ -133,10 +133,10 @@ def read_efm_raw(filenames, shift_dt=0.065):
     for sb in data_start_bytes:
         data_raw_packets.append(ba[sb:sb+data_packet_length+1])
         data_packets.append(decode_data_packet(ba[sb:sb+data_packet_length+1]))
-        
+
     adc_cal = (2 * 2.048) / 2**24
     adc_cal *= 2 # For voltage divider that is in-place
-    
+
     series = {}
     for field in data_packets[0].keys():
         vals = []
@@ -146,7 +146,7 @@ def read_efm_raw(filenames, shift_dt=0.065):
     df_fiber = pd.DataFrame(series)
     df_fiber['adc_volts_withlag'] = adc_cal * df_fiber['adc_reading']
     df_fiber['adc_volts'] = fix_adc_offset(df_fiber, dt=shift_dt)
-    
+
     series = {}
     for field in gps_packets[0].keys():
         vals = []
@@ -156,7 +156,7 @@ def read_efm_raw(filenames, shift_dt=0.065):
     df_gps = pd.DataFrame(series)
     df_gps['gps_time'] =  pd.to_datetime(df_gps['gps_time'], format='%H%M%S00', errors='coerce')
     df_gps.replace([0], np.nan, inplace=True)
-    
+
     return df_fiber, df_gps
 
 
@@ -171,15 +171,15 @@ def freq_peak(a, fs, skip_dc=3):
     N = a.shape[0]
     fft_a = np.fft.fft(a)
     freqs = np.fft.fftfreq(N, 1.0/fs)
-    
+
     if N % 2 == 0:
         # Even
         N_mid = int(N/2)
     else:
         N_mid = int((N-1)/2)
-        
+
     max_idx = np.argmax(np.abs(fft_a[skip_dc:N_mid]))
-    
+
     # Get the max frequency from the pos freq half of the FFT
     max_freq = freqs[skip_dc:N_mid][max_idx]
     max_phase = np.angle(fft_a[skip_dc:N_mid][max_idx])
@@ -201,42 +201,42 @@ def gen_overlap_chunks(a, chunk_overlap):
 def cosfit(a, interval, fs, guess_amplitude=10.0, unit_amplitude=False):
     """ Given data a, fitting interval in seconds, and sample frequency fs in Hz,
     fit a cosine to overlapping chunks of data.
-    
-    The actual fitting interval is chosen so that half of the interval overlaps 
+
+    The actual fitting interval is chosen so that half of the interval overlaps
     with the next chunk of data on an even array index boundary.
-    
+
     guess is the [amplitude (units of a), frequency (Hz), phase (rad)] to use
         for the first guess when fitting.
-        
+
     returns a dictionary with the fit data, and the number of samples in the overlapa
-        
+
     if unit_amplitude is True, then return a wave with amplitude=1.0; the actual
     fit amplitudes are still returned.
-        
+
     """
-    overlap = interval / 2 
-    # Get the number of overlapping intervals, and 
+    overlap = interval / 2
+    # Get the number of overlapping intervals, and
     overlap_idx = int(overlap * fs)
     interval_idx = int(overlap_idx*2)
     print("Actual interval to match sampling rate is {1:3.2f} s for given {0} s".format(interval, interval_idx / fs))
-    
+
     accum = np.zeros_like(a)
     fit_A = np.zeros_like(a)
     fit_freq = np.zeros_like(a)
     fit_phase = np.zeros_like(a)
     for chunk, chunk_sl in gen_overlap_chunks(a, overlap_idx):
         t = np.arange(chunk.shape[0])/fs
-        
+
         guess_freq, guess_phase = freq_peak(chunk, fs)
         if guess_freq < 0: raise
-        
+
         guess = [guess_amplitude, guess_freq, guess_phase ]
         try:
             params, params_covariance = curve_fit(cos_prototype, t, chunk, p0=guess)
         except RuntimeError as e:
-            # Typically, due to non-convergence of the least-squares fitting process. 
+            # Typically, due to non-convergence of the least-squares fitting process.
             print(e)
-            
+
             # Make a diagnostic plot
             fig, axes = plt.subplots(1, figsize=(12,6), sharex=True)
             axes.plot(t, chunk, '-k')
@@ -251,7 +251,7 @@ def cosfit(a, interval, fs, guess_amplitude=10.0, unit_amplitude=False):
         fit_A[chunk_sl] += params[0]
         fit_freq[chunk_sl] += params[1]
         fit_phase[chunk_sl] += params[2]
-        
+
     for d in (accum, fit_A, fit_freq, fit_phase):
         # Not overlapped at start or end
         d[:overlap_idx] *= 2.0
