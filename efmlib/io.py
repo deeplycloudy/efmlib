@@ -70,6 +70,8 @@ def packets_convert(ba, return_all=False,
     for sb in gps_start_bytes:
         gps_raw_packets.append(ba[sb:sb+gps_packet_length])
         bytes_to_remove.append(range(sb, sb+gps_packet_length))
+    if len(gps_raw_packets) == 0:
+        gps_raw_packets.append(bytearray(gps_packet_length))
 
     bytes_to_remove = np.array(bytes_to_remove)
     bytes_to_remove = bytes_to_remove.ravel()
