@@ -52,11 +52,12 @@ def fix_adc_offset(df, dt=0.065, up=32, adc_var='adc_volts_withlag'):
     n_up = n_orig*up
     adc_up = resample(df[adc_var], n_up)
     dn = int(np.floor(new_fs*dt)) # Number of samples to advance
-    print("Shifting ADC backward by {0:3.1f} original samples.".format(new_fs*dt/up))
-    new_adc = adc_up[dn::up]
+    print("Shifting ADC forward by {0:3.1f} original samples.".format(new_fs*dt/up))
+
+    new_adc = np.hstack([np.zeros(dn), adc_up])[::up]
     n_pad = n_orig - new_adc.shape[0]
     adc_volts_shifted = pd.Series(
-        np.hstack([new_adc, np.zeros(n_pad)]),
+        new_adc[:n_orig],
         index=df.index
     )
     assert adc_volts_shifted.shape[0] == n_orig
