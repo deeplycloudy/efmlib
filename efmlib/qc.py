@@ -17,7 +17,7 @@ def df_fiber_qc(df_fiber, data_period=22.5, max_milli=2):
     df_fiber = df_fiber[np.abs((df_fiber.diff()['adc_ready_millis']))<1e4]
     return df_fiber
 
-def fix_adc_offset(df, dt=0.065, up=50, adc_var='adc_volts_withlag'):
+def fix_adc_offset(df, dt=0.065, up=32, adc_var='adc_volts_withlag'):
     """
     The charge amplifier output exhibits a lag relative to the IMU, probably
     beacuse of some combination of an internal filter in the ADC and a phase
@@ -56,7 +56,8 @@ def fix_adc_offset(df, dt=0.065, up=50, adc_var='adc_volts_withlag'):
     new_adc = adc_up[dn::up]
     n_pad = n_orig - new_adc.shape[0]
     adc_volts_shifted = pd.Series(
-        np.hstack([new_adc, np.zeros(n_pad)])
+        np.hstack([new_adc, np.zeros(n_pad)]),
+        index=df.index
     )
     assert adc_volts_shifted.shape[0] == n_orig
     return adc_volts_shifted
