@@ -42,6 +42,13 @@ def df_fiber_qc(df_fiber, data_period=22.5, max_milli=2):
     # df_fiber = df_fiber[np.abs((df_fiber.diff()['adc_ready_millis']))<1e4]
     return df_fiber
 
+def cosFn ( data_milli, amplitude, frequency, phase, offset ):
+    #force some constraints
+    amplitude = abs(amplitude)
+    frequency = abs(frequency)
+
+    t0 = np.array(data_milli)[0]
+    return  amplitude*np.cos( 2*np.pi*(data_milli-t0)/1000.*frequency + phase ) + offset
 
 def df_fiber_filter( df_fiber, sample_rate=45, spin_rate=2, rotation_rate=0.5 ):
     """
