@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy import optimize
 
 def df_fiber_qc(df_fiber, data_period=22.5, max_milli=2):
     """
