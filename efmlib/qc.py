@@ -103,9 +103,9 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
     reconstruction_indices = []
     iStart = 0   #everything is good
     for i in range(1,len(t)-1):
-        if t[i] - t[i-1] < sample_period or t[i] - t[i-1] > sample_period+1:
+        if ((t[i] - t[i-1]) < sample_period) or ((t[i] - t[i-1]) > (sample_period+1)):
             #that's not ideal, something has shifted
-            if t[i+1] - t[i] < sample_period or t[i+1] - t[i] > sample_period+1:
+            if ((t[i+1] - t[i]) < sample_period) or ((t[i+1] - t[i]) > sample_period+1):
                 if iStart == 0:
                     iStart = i
 
@@ -143,6 +143,11 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
     print( 'attempting to reconstruct regions with cosine functions' )
     for i0,i1 in reconstruction_indices:
 
+        # Logic below assumes i0 and i1 are not the same, so ensure there's always at least
+        # two samples in question.
+        if i0==i1:
+            i1 = i1 + 1
+
         # reconstruct time
         # this is done linearly
         t = series[ 'adc_ready_millis' ]
@@ -155,16 +160,21 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
 
         # reconstruct the IMU fields
         # this is done with a cosine
-        for fieldName in ['magnetometer_x', 'magnetometer_y', 'magnetometer_z', 'acceleration_x', 'acceleration_y', 'acceleration_z', 'adc_volts']:
+        for fieldName in ['magnetometer_x', 'magnetometer_y', 'magnetometer_z',
+                          'acceleration_x', 'acceleration_y', 'acceleration_z', 'adc_volts']:
             data = series[fieldName]
+
+            # print(i0, data[i0], i1, data[i1], data[i0-10:i1+10])
+
+
 
             #we need to expand the field a bit to get the entire flat spot
             #it's always a bit bigger than it was in the time field
             j0 = i0
-            while data[j0] == data[j0+1] or data[j0] == data[j0-1]:
+            while (data[j0] == data[j0+1]) or (data[j0] == data[j0-1]):
                 j0 -= 1
             j1 = i1
-            while data[j1] == data[j1+1] or data[j1] == data[j1-1]:
+            while (data[j1] == data[j1+1]) or (data[j1] == data[j1-1]):
                 j1 += 1
 
             #now we get a snippet of data
