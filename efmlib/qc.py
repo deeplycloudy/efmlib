@@ -4,14 +4,14 @@ from scipy import optimize
 
 def df_fiber_qc(df_fiber, data_period=22.5, max_milli=2):
     """
-    Data recorded by the EFM has many many artifacts in the output.  
-    These are likely due to the crap connection on the fiber at the rotating 
-    interface.  The fiber here is just a butt connection, and one side of it 
-    is rotating.  Not something that exactly meets the quality standards of 
-    Norman building code.  So, we need to go through the data pretty carefully 
+    Data recorded by the EFM has many many artifacts in the output.
+    These are likely due to the crap connection on the fiber at the rotating
+    interface.  The fiber here is just a butt connection, and one side of it
+    is rotating.  Not something that exactly meets the quality standards of
+    Norman building code.  So, we need to go through the data pretty carefully
     looking for crap that isn't real.
 
-    This will mean that later on, we don't get monotonically spaced time.  
+    This will mean that later on, we don't get monotonically spaced time.
     Hope no one needs to do any Fourier analysis
     """
 
@@ -19,9 +19,9 @@ def df_fiber_qc(df_fiber, data_period=22.5, max_milli=2):
     # 'adc_ready_millis' field
     # what unit is millis exactly Eric?  Why do they need to be ready?  Who knows
 
-    # The most consistent way I've found to filter time is to calculate the 
+    # The most consistent way I've found to filter time is to calculate the
     # average period, and make sure it's within expected bounds
-    # we can't check for it to be over a lower bound, because the data recording 
+    # we can't check for it to be over a lower bound, because the data recording
     # has a tendency to restart part way through the flight
     t0 = df_fiber['adc_ready_millis'][:100].median()
     df_fiber['period'] = (df_fiber['adc_ready_millis']-t0)/np.arange( len(df_fiber['adc_ready_millis']) )
@@ -38,7 +38,7 @@ def df_fiber_qc(df_fiber, data_period=22.5, max_milli=2):
     # the EFM voltage is read off of a 24 bit adc, then read into a 32 bit field
     # so there's a lot of room for bunk values
     # the test is against 2**23 because the value is signed
-    df_fiber = df_fiber[np.abs(df_fiber['adc_reading'])<2**23]  
+    df_fiber = df_fiber[np.abs(df_fiber['adc_reading'])<2**23]
 
     # df_fiber = df_fiber[np.abs((df_fiber.diff()['adc_ready_millis']))<1e4]
     return df_fiber
@@ -53,22 +53,22 @@ def cosFn ( data_milli, amplitude, frequency, phase, offset ):
 
 def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 ):
     """
-    Data recorded by the EFM have many artifacts due to poor connection along the 
-    fiber rotary joint.  We can mask these (see df_fiber_qc), but the artifacts all 
-    show up as very high frequency spikes.  It's easier to just filter them out, 
+    Data recorded by the EFM have many artifacts due to poor connection along the
+    fiber rotary joint.  We can mask these (see df_fiber_qc), but the artifacts all
+    show up as very high frequency spikes.  It's easier to just filter them out,
     then we don't have to bother with interpolation later.
 
-    At the same time, we'll pull out the oscillations of interest from the IMU channels, 
+    At the same time, we'll pull out the oscillations of interest from the IMU channels,
     and remove the components we don't want to deal with.
 
-    The time field is going to need to be reconstructed, we don't really want to 
+    The time field is going to need to be reconstructed, we don't really want to
     filter that one if we can avoid it
 
-    the signal_bw is the frequency that the signal should be less than.  
-    this should be > 2*spin_rate to catch everything that we expect to be in the 
+    the signal_bw is the frequency that the signal should be less than.
+    this should be > 2*spin_rate to catch everything that we expect to be in the
     varous signals
 
-    adc_offset is the delay in seconds for the adc channel due to the analog ciruit 
+    adc_offset is the delay in seconds for the adc channel due to the analog circuit
     for the charge amplifier on the spheres
     """
 
@@ -82,19 +82,19 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
     m = np.ones( len(df_fiber), dtype='bool')
     for i in range(1,len(df_fiber)-1):
         #insertion errors, we've inserted some junk data
-        #we find these by looking at the time gap between 3 samples, 
+        #we find these by looking at the time gap between 3 samples,
         #and if it's the gap we expect between 2, then bob's some junk data
         if t[i+1]-t[i-1]>= sample_period and t[i+1]-t[i-1]<=sample_period+1:
             m[i] = False
 
-    #I don't get data frames, they always just get in my way, 
+    #I don't get data frames, they always just get in my way,
     #getting rid of them for the betterment of mankind
     #for a bit, I'll put them back, I promise
     series = {}
     for arr_name in df_fiber:
         series[ arr_name ] = np.array( df_fiber[arr_name][m] )
 
-    
+
     # df_fiber = df_fiber[m]
 
     print( 'indentifying sections that need reconstruction' )
@@ -103,9 +103,9 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
     reconstruction_indices = []
     iStart = 0   #everything is good
     for i in range(1,len(t)-1):
-        if t[i] - t[i-1] < sample_period or t[i] - t[i-1] > sample_period+1:
+        if ((t[i] - t[i-1]) < sample_period) or ((t[i] - t[i-1]) > (sample_period+1)):
             #that's not ideal, something has shifted
-            if t[i+1] - t[i] < sample_period or t[i+1] - t[i] > sample_period+1:
+            if ((t[i+1] - t[i]) < sample_period) or ((t[i+1] - t[i]) > sample_period+1):
                 if iStart == 0:
                     iStart = i
 
@@ -138,11 +138,16 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
                 series[k] = series[k][m]
             #update the time array (may not be required because pointers)
             t = series['adc_ready_millis']
-    
+
     #try to do the reconstruction
     print( 'attempting to reconstruct regions with cosine functions' )
     for i0,i1 in reconstruction_indices:
-        
+
+        # Logic below assumes i0 and i1 are not the same, so ensure there's always at least
+        # two samples in question.
+        if i0==i1:
+            i1 = i1 + 1
+
         # reconstruct time
         # this is done linearly
         t = series[ 'adc_ready_millis' ]
@@ -155,22 +160,27 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
 
         # reconstruct the IMU fields
         # this is done with a cosine
-        for fieldName in ['magnetometer_x', 'magnetometer_y', 'magnetometer_z', 'acceleration_x', 'acceleration_y', 'acceleration_z', 'adc_volts']:
+        for fieldName in ['magnetometer_x', 'magnetometer_y', 'magnetometer_z',
+                          'acceleration_x', 'acceleration_y', 'acceleration_z', 'adc_volts']:
             data = series[fieldName]
+
+            # print(i0, data[i0], i1, data[i1], data[i0-10:i1+10])
+
+
 
             #we need to expand the field a bit to get the entire flat spot
             #it's always a bit bigger than it was in the time field
             j0 = i0
-            while data[j0] == data[j0+1] or data[j0] == data[j0-1]:
+            while (data[j0] == data[j0+1]) or (data[j0] == data[j0-1]):
                 j0 -= 1
             j1 = i1
-            while data[j1] == data[j1+1] or data[j1] == data[j1-1]:
+            while (data[j1] == data[j1+1]) or (data[j1] == data[j1-1]):
                 j1 += 1
 
             #now we get a snippet of data
             amp = data[j0-100:j0].max()
             fit = optimize.curve_fit( cosFn, t[j0-100:j0], data[j0-100:j0], p0=[amp,2,0,0] )
-            
+
             data[j0:j1] = cosFn( t[j0:j1], *fit[0] )
 
     #we've now gotten almost all of it
@@ -178,7 +188,7 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
     #and we also have as bunch of noise that's outside of the band to remove
 
     # #generate an array of frequencies
-    freq = np.fft.fftfreq( len(series['adc_ready_millis']) )*sample_rate 
+    freq = np.fft.fftfreq( len(series['adc_ready_millis']) )*sample_rate
 
     #LPF for spin stuff
     LPF_spin  = np.zeros( len(freq) )
@@ -195,7 +205,7 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
                 #something is wrong, fill in from the previous value
                 #this mostly is here to just remove the any massive power in an impulse
                 series[fieldName][i] = series[fieldName][i-1]
-    
+
         #now filter the data
         f = np.fft.fft( series[fieldName] )
         if fieldName == 'adc_volts':
@@ -254,13 +264,19 @@ def fix_adc_offset(df, dt=0.065, up=50, adc_var='adc_volts_withlag'):
     n_orig = df[adc_var].shape[0]
     n_up = n_orig*up
     adc_up = resample(df[adc_var], n_up)
-    
+
+    # dn = int(np.floor(new_fs*dt)) # Number of samples to advance
+    # print("Shifting ADC forward by {0:3.1f} original samples.".format(new_fs*dt/up))
+    #
+    # new_adc = np.hstack([np.zeros(dn), adc_up])[::up]
+
     #do not shift the data before filtering the data, it's a bad idea
     print("Shifting ADC backward by {0:3.1f} original samples.".format(new_fs*dt/up))
     new_adc = adc_up[dn::up]
     n_pad = n_orig - new_adc.shape[0]
     adc_volts_shifted = pd.Series(
-        np.hstack([new_adc, np.zeros(n_pad)])
+        new_adc[:n_orig],
+        index=df.index
     )
     assert adc_volts_shifted.shape[0] == n_orig
     return adc_volts_shifted

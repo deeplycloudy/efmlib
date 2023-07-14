@@ -2,7 +2,7 @@ import struct
 import numpy as np
 import pandas as pd
 
-from .qc import fix_adc_offset
+# from .qc import fix_adc_offset
 
 def decode_gps_packet(mp):
     result = dict()
@@ -58,7 +58,7 @@ def decode_data_packet_old(mp):
 def packets_convert(ba, return_all=False,
                     gps_packet_length=20, gps_start_bytes=[],
                     data_packet_length=34, data_start_bytes=[],
-                    shift_dt=0.0):
+                    ):
     # Find Starts
     for i in range(len(ba) - gps_packet_length):
         if (ba[i] == 254) and (ba[i+gps_packet_length-1] == 237):
@@ -116,19 +116,15 @@ def packets_convert(ba, return_all=False,
 
     adc_cal = (2 * 2.048) / 2**24
     adc_cal *= 2 # For voltage divider that is in-place
-    df_fiber['adc_volts_withlag'] = adc_cal * df_fiber['adc_reading']
-    df_fiber['adc_volts'] = fix_adc_offset(df_fiber, dt=shift_dt)
+    df_fiber['adc_volts'] = adc_cal * df_fiber['adc_reading']
 
     if return_all==True:
         return df_gps, df_fiber, data_packets, gps_packets
     else:
         return df_gps, df_fiber
 
-def read_efm_raw(filenames, shift_dt=0.065):
+def read_efm_raw(filenames):
     """ Read raw EFM files from SD card given a list of filenames.
-
-    shift_dt is passed to qc.fix_adc_offset to account for a lag in the
-    charge amplifier relative to the IMU.
     """
     ba = bytearray()
     for filename in filenames:
