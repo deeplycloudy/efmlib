@@ -51,7 +51,7 @@ def cosFn ( data_milli, amplitude, frequency, phase, offset ):
     t0 = np.array(data_milli)[0]
     return  amplitude*np.cos( 2*np.pi*(data_milli-t0)/1000.*frequency + phase ) + offset
 
-def df_fiber_filter( df_fiber, sample_rate=45, signal_bw=5,adc_offset=0.065 ):
+def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 ):
     """
     Data recorded by the EFM have many artifacts due to poor connection along the 
     fiber rotary joint.  We can mask these (see df_fiber_qc), but the artifacts all 
@@ -63,7 +63,7 @@ def df_fiber_filter( df_fiber, sample_rate=45, signal_bw=5,adc_offset=0.065 ):
 
     The time field is going to need to be reconstructed, we don't really want to 
     filter that one if we can avoid it
-    
+
     the signal_bw is the frequency that the signal should be less than.  
     this should be > 2*spin_rate to catch everything that we expect to be in the 
     varous signals
