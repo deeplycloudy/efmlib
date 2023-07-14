@@ -162,6 +162,33 @@ def df_fiber_filter( df_fiber, sample_rate=45, spin_rate=2, rotation_rate=0.5 ):
             
             data[j0:j1] = cosFn( t[j0:j1], *fit[0] )
 
+    #we've now gotten almost all of it
+    #there will still be a little bit of cruft left
+    #and we also have as bunch of noise that's outside of the band to remove
+
+    # #generate an array of frequencies
+    freq = np.fft.fftfreq( len(series['adc_ready_millis']) )*sample_rate 
+
+    #LPF for spin stuff
+    LPF_spin  = np.zeros( len(freq) )
+    LPF_spin[ abs(freq)<signal_bw ] =1
+
+
+    #look for outliers in the output
+    print( 'Removing outlier noise' )
+    for fieldName in ['magnetometer_x', 'magnetometer_y', 'magnetometer_z', 'acceleration_x', 'acceleration_y', 'acceleration_z', 'adc_volts']:
+        #get a threshold
+        dv = 10*np.quantile( abs( np.diff( series['adc_volts'] ) ), .95  )
+        for i in range( 1, len( series[fieldName]) ):
+            if abs(series[fieldName][i]) > abs(series[fieldName][i-1]) + dv:
+                #something is wrong, fill in from the previous value
+                #this mostly is here to just remove the any massive power in an impulse
+                series[fieldName][i] = series[fieldName][i-1]
+    
+        #now filter the data
+        f = np.fft.fft( series[fieldName] )
+        series[fieldName ] = np.fft.ifft( f*LPF_spin ).real
+
     #we've removed a bunch of stuff, now we have to deal with the shit pd dataframe
     #why are we using data frames again?
     #seems like the easiest way to deal with this is to just make a whole new frame
