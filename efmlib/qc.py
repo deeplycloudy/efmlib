@@ -51,7 +51,7 @@ def cosFn ( data_milli, amplitude, frequency, phase, offset ):
     t0 = np.array(data_milli)[0]
     return  amplitude*np.cos( 2*np.pi*(data_milli-t0)/1000.*frequency + phase ) + offset
 
-def df_fiber_filter( df_fiber, sample_rate=45, spin_rate=2, rotation_rate=0.5 ):
+def df_fiber_filter( df_fiber, sample_rate=45, signal_bw=5 ):
     """
     Data recorded by the EFM have many artifacts due to poor connection along the 
     fiber rotary joint.  We can mask these (see df_fiber_qc), but the artifacts all 
@@ -166,7 +166,7 @@ def df_fiber_filter( df_fiber, sample_rate=45, spin_rate=2, rotation_rate=0.5 ):
 
             #now we get a snippet of data
             amp = data[j0-100:j0].max()
-            fit = optimize.curve_fit( cosFn, t[j0-100:j0], data[j0-100:j0], p0=[amp,spin_rate,0,0] )
+            fit = optimize.curve_fit( cosFn, t[j0-100:j0], data[j0-100:j0], p0=[amp,2,0,0] )
             
             data[j0:j1] = cosFn( t[j0:j1], *fit[0] )
 
