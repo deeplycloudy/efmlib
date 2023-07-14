@@ -51,7 +51,7 @@ def cosFn ( data_milli, amplitude, frequency, phase, offset ):
     t0 = np.array(data_milli)[0]
     return  amplitude*np.cos( 2*np.pi*(data_milli-t0)/1000.*frequency + phase ) + offset
 
-def df_fiber_filter( df_fiber, sample_rate=45, signal_bw=5 ):
+def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 ):
     """
     Data recorded by the EFM have many artifacts due to poor connection along the
     fiber rotary joint.  We can mask these (see df_fiber_qc), but the artifacts all
@@ -64,9 +64,12 @@ def df_fiber_filter( df_fiber, sample_rate=45, signal_bw=5 ):
     The time field is going to need to be reconstructed, we don't really want to
     filter that one if we can avoid it
 
-    Spin and rotation rates here are approximate.  They're used to construct the
-    LPF and HPF filters used in this function.  The critical bit is that
-            2*rotation_rate < spin_rate
+    the signal_bw is the frequency that the signal should be less than.
+    this should be > 2*spin_rate to catch everything that we expect to be in the
+    varous signals
+
+    adc_offset is the delay in seconds for the adc channel due to the analog circuit
+    for the charge amplifier on the spheres
     """
 
     sample_period = np.floor( 1000/sample_rate )
@@ -195,7 +198,14 @@ def df_fiber_filter( df_fiber, sample_rate=45, signal_bw=5 ):
 
         #now filter the data
         f = np.fft.fft( series[fieldName] )
-        series[fieldName ] = np.fft.ifft( f*LPF_spin ).real
+        if fieldName == 'adc_volts':
+            #for this one, we also apply a time shift
+            N = len( series[fieldName] )
+            df = np.exp( -2J*np.pi*np.fft.fftfreq(N)*(-adc_offset*sample_rate) )
+            series[fieldName ] = np.fft.ifft( f*LPF_spin*df ).real
+
+        else:
+            series[fieldName ] = np.fft.ifft( f*LPF_spin ).real
 
     #we've removed a bunch of stuff, now we have to deal with the shit pd dataframe
     #why are we using data frames again?
