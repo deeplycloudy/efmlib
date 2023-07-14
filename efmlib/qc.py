@@ -186,7 +186,7 @@ def df_fiber_filter( df_fiber, sample_rate=45, signal_bw=5 ):
     print( 'Removing outlier noise' )
     for fieldName in ['magnetometer_x', 'magnetometer_y', 'magnetometer_z', 'acceleration_x', 'acceleration_y', 'acceleration_z', 'adc_volts']:
         #get a threshold
-        dv = 10*np.quantile( abs( np.diff( series['adc_volts'] ) ), .95  )
+        dv = 10*np.quantile( abs( np.diff( series[fieldName] ) ), .95  )
         for i in range( 1, len( series[fieldName]) ):
             if abs(series[fieldName][i]) > abs(series[fieldName][i-1]) + dv:
                 #something is wrong, fill in from the previous value
