@@ -3,10 +3,60 @@ import pandas as pd
 
 from scipy.optimize import curve_fit
 
+import scipy.signal as signal
 
 #####
 # Fitting functions for normalizing accelerometer, mag field data
 #####
+
+def simplistic_E_polarity(df_fiber, bp_sos, lp_cut, fs=45.45):
+    """For a quick hack at polarity, let's bandpass filter the ADC signal
+    (use the same filter as used to normalize the acceleromter),
+    then multiply accel_y and low pass filter to get a smoothed polarity signal.
+
+    This is a hacky way to get a polarity that uses the same method as in-phase
+    demodulation, but doesn't worry so much about whether we've gotten the I/Q
+    signals exactly correct.
+    """
+
+    adc_polarity_bp = signal.sosfilt(bp_sos, df_fiber['adc_volts'])
+
+    adc_pol_lp_sos = signal.butter(10, lp_cut, 'lp', fs=fs, output='sos')
+    adc_polarity = signal.sosfilt(adc_pol_lp_sos, adc_polarity_bp * df_fiber['acceleration_y_bp'])
+    adc_sign = np.sign(adc_polarity)
+
+    return adc_polarity_bp, adc_pol_lp_sos, adc_polarity, adc_sign
+
+
+def normalize_accelerometer(df_fiber, fs=45.45, filter_order=10):
+    """
+    Bandpass filter the accelerometer signals with a generous passband centered at
+    the spin frequency, and add accleration_[x|y|z]_bp to df_fiber.
+
+    Also normalize each signal by the total magnitude of the accelerometer vector
+    at each sample.
+
+    The aim is to normalize the x and y accelerometer signals to [-1,1] as though they
+    were the IQ spin reference signal. This only works if the EFM is in level flight
+    (acceleration_z = 0), since tilt means x and y no longer align with the full
+    gravity vector and some of the magnitude is projected into acceleration_z.
+    """
+    f_spin = freq_peak(df_fiber['acceleration_x'], fs)[0]
+    full_width = 0.5*f_spin
+    half_width = full_width/2
+    passband = [f_spin-half_width, f_spin+half_width]
+
+    accel_qc_bp_sos = signal.butter(filter_order, passband, 'bp', fs=fs, output='sos')
+
+    to_filt = ['acceleration_x', 'acceleration_y', 'acceleration_z']
+    for fname in to_filt:
+        df_fiber[fname+'_bp'] = signal.sosfilt(accel_qc_bp_sos, df_fiber[fname])
+
+    bp_accel_total = np.sqrt(df_fiber.acceleration_x_bp**2 + df_fiber.acceleration_y_bp**2 + df_fiber.acceleration_z_bp**2)
+    for fname in to_filt:
+        df_fiber[fname+'_bp'] /= bp_accel_total
+
+    return df_fiber, passband, accel_qc_bp_sos
 
 def freq_peak(a, fs, skip_dc=3):
     """ Given data in a and sampling frequcy fs in Hz, return the
