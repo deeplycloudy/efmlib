@@ -19,6 +19,7 @@ def simplistic_E_polarity(df_fiber, bp_sos, lp_cut, fs=45.45):
     signals exactly correct.
     """
 
+
     adc_polarity_bp = signal.sosfilt(bp_sos, df_fiber['adc_volts'])
 
     adc_pol_lp_sos = signal.butter(10, lp_cut, 'lp', fs=fs, output='sos')
@@ -28,7 +29,7 @@ def simplistic_E_polarity(df_fiber, bp_sos, lp_cut, fs=45.45):
     return adc_polarity_bp, adc_pol_lp_sos, adc_polarity, adc_sign
 
 
-def normalize_accelerometer(df_fiber, fs=45.45, filter_order=10):
+def normalize_accelerometer(df_fiber, board_reversed, fs=45.45, filter_order=10, assume_spin=None):
     """
     Bandpass filter the accelerometer signals with a generous passband centered at
     the spin frequency, and add accleration_[x|y|z]_bp to df_fiber.
@@ -41,7 +42,16 @@ def normalize_accelerometer(df_fiber, fs=45.45, filter_order=10):
     (acceleration_z = 0), since tilt means x and y no longer align with the full
     gravity vector and some of the magnitude is projected into acceleration_z.
     """
-    f_spin = freq_peak(df_fiber['acceleration_x'], fs)[0]
+    if assume_spin is None:
+        f_spin = freq_peak(df_fiber['acceleration_x'], fs)[0]
+        if f_spin < 1.3:
+            print("Initial spin rate less than 1.3 ... trying again")
+            # The spin rate detection can have a wider range of
+            # if spin partially stops during flight.
+            f_spin = freq_peak(df_fiber['acceleration_x'], fs, skip_dc=100)[0]
+    else:
+        f_spin=assume_spin
+    print("Using spin frequency of ", f_spin, " Hz for filter configuration")
     full_width = 0.5*f_spin
     half_width = full_width/2
     passband = [f_spin-half_width, f_spin+half_width]
@@ -55,6 +65,13 @@ def normalize_accelerometer(df_fiber, fs=45.45, filter_order=10):
     bp_accel_total = np.sqrt(df_fiber.acceleration_x_bp**2 + df_fiber.acceleration_y_bp**2 + df_fiber.acceleration_z_bp**2)
     for fname in to_filt:
         df_fiber[fname+'_bp'] /= bp_accel_total
+
+    if board_reversed == True:
+        # +a_y points out to space
+        df_fiber['acceleration_y_bp'] *= -1
+    else:
+        # +a_y points toward spin axis
+        df_fiber['acceleration_y_bp'] *= 1
 
     return df_fiber, passband, accel_qc_bp_sos
 
