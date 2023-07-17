@@ -163,7 +163,7 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
             j0 = i0
             while data[j0] == data[j0+1] or data[j0] == data[j0-1]:
                 j0 -= 1
-            j1 = i1
+            j1 = i1+1
             while data[j1] == data[j1+1] or data[j1] == data[j1-1]:
                 j1 += 1
 
