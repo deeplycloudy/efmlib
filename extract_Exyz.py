@@ -7,7 +7,12 @@ from scipy import optimize
 
 import efmlib
 
-
+"""
+This is a demodulation method based on the Paul Krehbiel's notes of the previous EFM package
+To demodulate the vector electric field, they use standard mixing techniques, so you 
+multiply by the carrier frequency and average.  In simulations, this worked pretty well, but 
+in the real data the demodulated signal is prone to oscillations.  
+"""
 
 samplerate    = 45.45   #Hz
 spin          = 1.6     #Hz (approximate)
