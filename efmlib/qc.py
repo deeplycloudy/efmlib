@@ -209,7 +209,12 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, adc_offset=-0.065 ):
     #we can't overwrite the old field names, because reasons
     df = pd.DataFrame()
     for field_name in series:
-        df[field_name] = series[field_name]
+        #while we're doing this, make sure there's an even number of samples
+        #this will make later FFT based filtering less annoying
+        if len( series[field_name] ) %2 == 0:
+            df[field_name] = series[field_name]
+        else:
+            df[field_name] = series[field_name][:-1]
     return df
 
 def fix_adc_offset(df, dt=0.065, up=50, adc_var='adc_volts_withlag'):
