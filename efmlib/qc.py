@@ -51,7 +51,7 @@ def cosFn ( data_milli, amplitude, frequency, phase, offset ):
     t0 = np.array(data_milli)[0]
     return  amplitude*np.cos( 2*np.pi*(data_milli-t0)/1000.*frequency + phase ) + offset
 
-def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 ):
+def df_fiber_filter( df_fiber, sample_rate=45.45, adc_offset=-0.065 ):
     """
     Data recorded by the EFM have many artifacts due to poor connection along the 
     fiber rotary joint.  We can mask these (see df_fiber_qc), but the artifacts all 
@@ -63,10 +63,6 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
 
     The time field is going to need to be reconstructed, we don't really want to 
     filter that one if we can avoid it
-
-    the signal_bw is the frequency that the signal should be less than.  
-    this should be > 2*spin_rate to catch everything that we expect to be in the 
-    varous signals
 
     adc_offset is the delay in seconds for the adc channel due to the analog ciruit 
     for the charge amplifier on the spheres
@@ -175,37 +171,37 @@ def df_fiber_filter( df_fiber, sample_rate=45.45, signal_bw=5,adc_offset=0.065 )
 
     #we've now gotten almost all of it
     #there will still be a little bit of cruft left
-    #and we also have as bunch of noise that's outside of the band to remove
-
-    # #generate an array of frequencies
-    freq = np.fft.fftfreq( len(series['adc_ready_millis']) )*sample_rate 
-
-    #LPF for spin stuff
-    LPF_spin  = np.zeros( len(freq) )
-    LPF_spin[ abs(freq)<signal_bw ] =1
-
-
-    #look for outliers in the output
+    #look for outliers in the output, then fill them in using linear interpolation
     print( 'Removing outlier noise' )
     for fieldName in ['magnetometer_x', 'magnetometer_y', 'magnetometer_z', 'acceleration_x', 'acceleration_y', 'acceleration_z', 'adc_volts']:
         #get a threshold
         dv = 10*np.quantile( abs( np.diff( series[fieldName] ) ), .95  )
         for i in range( 1, len( series[fieldName]) ):
             if abs(series[fieldName][i]) > abs(series[fieldName][i-1]) + dv:
-                #something is wrong, fill in from the previous value
-                #this mostly is here to just remove the any massive power in an impulse
-                series[fieldName][i] = series[fieldName][i-1]
-    
-        #now filter the data
-        f = np.fft.fft( series[fieldName] )
-        if fieldName == 'adc_volts':
-            #for this one, we also apply a time shift
-            N = len( series[fieldName] )
-            df = np.exp( -2J*np.pi*np.fft.fftfreq(N)*(-adc_offset*sample_rate) )
-            series[fieldName ] = np.fft.ifft( f*LPF_spin*df ).real
+                #something is wrong, this is way too big.  Keep going until it isn't
+                if i0 is None:
+                    i0 = i-1
+            elif i0 is not None:
+                if not abs(series[fieldName][i]) > abs(series[fieldName][i0]) + dv:
+                    print( i0, i )
+                    #we had found something, and now we need to do a linear interp
+                    v0 = series[fieldName][i0]
+                    v1 = series[fieldName][i]
 
-        else:
-            series[fieldName ] = np.fft.ifft( f*LPF_spin ).real
+                    #what's the slope?
+                    m = (v1-v0)/(i-i0)
+
+                    #then the equation is v = v0 + m*(i-i0)
+                    x = np.arange( i0, i )
+                    series[fieldName][i0:i] = v0+m*(x-i0)
+                    
+                    #reset things
+                    i0 = None
+
+    #last on the list is to correct the delay in the voltage signal
+    v = np.fft.fft( series['adc_volts'] )
+    df = np.exp( -2J*np.pi*np.fft.fftfreq(len(v))*sample_rate*adc_offset )
+    series['adc_volts'] = np.fft.ifft( v*df ).real    
 
     #we've removed a bunch of stuff, now we have to deal with the shit pd dataframe
     #why are we using data frames again?
