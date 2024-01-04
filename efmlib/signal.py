@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from scipy.optimize import curve_fit
+from scipy import signal
 
 
 #####
@@ -40,6 +41,99 @@ def gen_overlap_chunks(a, chunk_overlap):
         sl = slice(i0, i1)
         yield a[sl], sl
     assert i1 == a.shape[0]+1
+
+
+def extract_carrier( arr ):
+    """
+    Uses a hilber transform to extract the carrier phase from the signal.  
+    Works independent of carrier frequency
+
+    prefiltering the data prior to carrier extraction is recommended
+    """
+    h = signal.hilbert( detrend(arr) )
+    #get the phase
+    carrier_p = np.angle( h )
+
+    return carrier_p
+
+def demodulate_voltage( V, At, Ba, samplerate=45.45, demodLPF=1.0, demodBPF=0.75 ):
+    """
+    Uses the methods outlined in Paul Krehbiel's notes to demodulate the signals
+    except for extract_carrier, which is some slightly fancier math to get better 
+    carrier signals from the data
+
+    Takes as input:
+    V           Signal voltage (in volts)
+    At          Tangential acceleration (units arbitrary)
+    Ba          Axial magnetic field (units arbitrary)
+    samplerate  defaults to 45.45
+    demodLPF    Low pass filter used for demodulation, defaults to 1 Hz
+    demodBPF    Band pass filter, used for the horizontal field
+    """
+
+    from numpy import cos, sin
+
+    #because of the way they FFT's work, I really need the arrays to be an even number of samples
+    if len(V)%2 != 0:
+        V = V[:-1]
+        At = At[:-1]
+        Ba = Ba[:-1]
+
+    #extract the spin phase, this is done on the tangential accelaration channel because there are less components to it
+    spinPhase = extract_carrier( At )
+    #we can do the same for the rotation phase using the axial magnetic field
+    #if there's tilt, this one will have some pretty wild modulation in it that may affect this estimate
+    rotPhase  = extract_carrier( Ba )
+
+
+    #lets do some mixing
+    freq = np.fft.rfftfreq( len(V) )*samplerate
+    Ez_ = 2*V*sin( spinPhase )
+    #apply a low pass filter
+    lpf = np.zeros( len(freq) )
+    m = freq < demodLPF
+    lpf[m] = .5+.5*np.cos( np.pi*freq[m]/demodLPF )
+    Ez_ = np.fft.irfft( np.fft.rfft(Ez_)*lpf )
+
+    Eh_ = 2*V*cos( spinPhase )
+    #construct a bandpass filter for this
+    bpf = np.zeros( len(freq) )
+    m = (freq > demodBPF - demodBPF/2)&(freq < demodBPF + demodBPF/2)
+    bpf[m] += .5 + .5*np.cos( 2*np.pi*(freq[m]-demodBPF)/demodBPF )
+    Eh_ = np.fft.irfft( np.fft.rfft(Eh_)*bpf )
+
+    #get x and y
+    Ey_ = -2*Eh_*sin( rotPhase )
+    #construct lower LPF based on the BPF center frequency
+    lpf = np.zeros( len(freq) )
+    m = freq < demodBPF
+    lpf[m] = .5+.5*np.cos( np.pi*freq[m]/demodBPF )
+    Ey_ = np.fft.irfft( np.fft.rfft(Ey_)*lpf )
+
+    Ex_ = -2*Eh_*cos( rotPhase )
+    #construct lower LPF based on the BPF center frequency
+    Ex_ = np.fft.irfft( np.fft.rfft(Ex_)*lpf )
+
+    return Ex_, Ey_, Ez_ 
+
+def detrend( arr, samplerate=45.45, f0=0.05 ):
+    """
+    Detrends the signal using a highpass filter, with a very low high pass cutoff
+
+    samplerate      Is the samplerate of the system, defaults to 45.45
+    f0              is the frequency of the high pass filter, defaults to 0.05 Hz
+    """
+    #scipy has some detrend functions, but just a linear and a constant one.
+    #here, we really want to highpass filter the data above some very slow rate
+
+    v = np.fft.rfft( arr )
+    f    = np.fft.rfftfreq( len(arr) )*samplerate
+    filt = np.ones( len(f) )
+    filt[ f<f0 ] = .5-.5*np.cos( np.pi*f[f<f0]/f0 )
+
+    arr_ = np.fft.irfft( v*filt )
+
+    return arr_
 
 
 def cosfit(a, interval, fs, guess_amplitude=10.0, unit_amplitude=False):
